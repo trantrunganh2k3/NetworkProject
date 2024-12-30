@@ -19,6 +19,7 @@
 #define DATA_FILE "users.txt"
 #define TOKEN_SIZE 32
 #define MIN_PLAYERS 3
+#define MAX_QUESTIONS 10
 
 typedef struct {
     char token[SHA256_DIGEST_LENGTH * 2 + 1];
@@ -53,7 +54,7 @@ int user_count = 0;
 Player *main_player = NULL;
 int client_count = 0;
 
-const char *question = "What is the result of 2 + 2";
+const char *question = "Kết quả của phép tính 2 + 2 là: ";
 const char *correct_answer = "4";
 int active_player_count = 0;
 int game_in_progress = 0; // 0: Không có trò chơi, 1: Đang diễn ra
@@ -62,6 +63,67 @@ int number_of_questions = 0;
 int eliminated_player_count = 0; // Số người chơi bị loại
 int skipped_count = 0;
 char* main_player_answer;
+
+typedef struct {
+    char question[256];
+    char answers[4][64];
+    char correct_answers[2];
+} Question;
+
+question_number = 0;
+
+Question questions[MAX_QUESTIONS] = {
+    {
+        "Thủ đô của Việt Nam là gì?",
+        {"Hà Nội", "Thành Phố Hồ Chí Minh", "Đà Nẵng", "Hải Phòng"},
+        "1"
+    },
+    {
+        "Tính đến năm 2024, đã có bao nhiêu khóa sinh viên ĐHBKHN?",
+        {"69", "70", "68", "71"},
+        "1"
+    },
+    {
+        "Có bao nhiêu bang ở Mỹ?",
+        {"49", "51", "50", "52"},
+        "3"
+    },
+    {
+        "Đại học Bách Khoa Hà Nội được thành lập vào năm nào?",
+        {"1958", "1956", "1960", "1967"},
+        "2"
+    },
+    {
+        "Ai đã vẽ bức tranh Mona Lisa?",
+        {"Van Gogh", "Da Vinci", "Picasso", "Rembrandt"},
+        "2"
+    },
+    {
+        "Có bao nhiêu châu lục trên thế giới?",
+        {"5", "7", "6", "4"},
+        "3"
+    },
+    {
+        "Nguyên tố nào phổ biến nhất?",
+        {"Helium", "Carbon", "Oxygen", "Hydrogen"},
+        "4"
+    },
+    {
+        "Căn bậc 2 của 144 là bao nhiêu?",
+        {"10", "11", "12", "13"},
+        "3"
+    },
+    {
+        "Ai đã viết 'Romeo and Juliet'?",
+        {"Charles Dickens", "William Shakespeare", "Jane Austen", "Mark Twain"},
+        "2"
+    },
+    {
+        "Đại học Bách Khoa Hà Nội có bao nhiêu cổng?",
+        {"2", "3", "4", "5"},
+        "3"
+    }
+};
 
 void generate_token(char *token, const char *username, int client_sock) {
     char data[256];
@@ -154,7 +216,10 @@ void handle_joingame(int client_sock, char *token) {
 
 void handle_game_start(){
     char message[BUFFER_SIZE];
-    snprintf(message, sizeof(message), "STARTGAME|abc_123|%s|1|5|3|4", question);
+    snprintf(message, sizeof(message), "STARTGAME|%d|%s|%s|%s|%s|%s", 
+        number_of_questions, questions[number_of_questions].question, 
+        questions[number_of_questions].answers[0], questions[number_of_questions].answers[1],
+        questions[number_of_questions].answers[2], questions[number_of_questions].answers[3]);
     pthread_mutex_lock(&lock);
     for (int i = 0; i < active_player_count; i++)
     {
@@ -176,7 +241,7 @@ void handle_answer(int client_sock, const char *token, const char *answer){
             } else {
                 active_players[i].answered = 1;
                 active_players[i].answer_time = time(NULL);
-                if (strcmp(answer, correct_answer) == 0) {
+                if (strcmp(answer, questions[number_of_questions].correct_answers) == 0) {
                     active_players[i].correct = 1;
                     send(client_sock, "ANSWER|Correct!", 17, 0);
                 } else {
@@ -228,9 +293,13 @@ void reset_game_state(){
 // Bắt đầu vòng chơi mới
 void start_new_round() {
     reset_game_state();
+    number_of_questions++;
 
     char question_buffer[BUFFER_SIZE];
-    snprintf(question_buffer, sizeof(question_buffer), "QUESTION|abc_123|%s|1|5|3|4", question);
+    snprintf(question_buffer, sizeof(question_buffer), 
+        "QUESTION|%d|%s|%s|%s|%s|%s", number_of_questions, questions[number_of_questions].question, 
+        questions[number_of_questions].answers[0], questions[number_of_questions].answers[1],
+        questions[number_of_questions].answers[2], questions[number_of_questions].answers[3]);
 
     pthread_mutex_lock(&lock);
     for (int i = 0; i < active_player_count; i++) {
@@ -465,7 +534,6 @@ void* handle_client(void *arg) {
             if (game_in_progress && main_player_choice && number_of_questions == 0) {
                 // Nếu tất cả đã trả lời, tiến hành vòng tiếp theo
                 usleep(5 * 1000 * 1000); // Chờ 1s
-                number_of_questions++;
                 start_new_round();
             }
         }
