@@ -60,6 +60,8 @@ int game_in_progress = 0; // 0: Không có trò chơi, 1: Đang diễn ra
 int main_player_choice = 0; // 0: Chưa chọn, 1: Chọn đúng
 int number_of_questions = 0;
 int eliminated_player_count = 0; // Số người chơi bị loại
+int skipped_count = 0;
+char* main_player_answer;
 
 void generate_token(char *token, const char *username, int client_sock) {
     char data[256];
@@ -134,7 +136,7 @@ void handle_joingame(int client_sock, char *token) {
 
     strcpy(active_players[active_player_count].token, token);
     active_players[active_player_count].client_sock = client_sock;
-    printf("%s\n", active_players[active_player_count].token);
+    //printf("%s\n", active_players[active_player_count].token);
     active_player_count++;
     pthread_mutex_unlock(&lock);
 
@@ -142,8 +144,10 @@ void handle_joingame(int client_sock, char *token) {
     send(client_sock, "JOINGAME|You have joined game successfully!", 44, 0);
 
     if(active_player_count >= MIN_PLAYERS){
+        usleep(1*1000*1000);
         printf("Enough players joined, starting the game.\n");
         game_in_progress = 1;
+        usleep(1*1000*1000);
         handle_game_start();
     }
 }
@@ -279,37 +283,55 @@ void handle_round_result() {
         for (int i = 0; i < active_player_count; i++) {
             if (!active_players[i].eliminated) {
                 if (active_players[i].correct) {
-
                     if (active_players[i].client_sock != main_player->client_sock &&
                         (!new_main_player || active_players[i].answer_time < fastest_time)) {
                         new_main_player = &active_players[i];
                         fastest_time = active_players[i].answer_time;
                     }
+                } else if(strcmp(active_players[i].token, main_player->token) == 0 && skipped_count <2 && strcmp(main_player_answer, "5") == 0){
+                    total_wrong_points += active_players[i].points / 2;
+                    active_players[i].points = active_players[i].points / 2;
                 } else {
                     active_players[i].eliminated = 1;
                     total_wrong_points += active_players[i].points;
                     eliminated_player_count++;
-                    printf("\n\n%.2f\n\n", total_wrong_points);
                 }
             }
         }
 
+        //printf("\n\n%.2f\n\n", total_wrong_points);
+        //printf("\nMain player anwser: \n%d\nSkip count: %d\n", strcmp(main_player_answer, "5"), skipped_count);
+
         if (main_player->correct) {
             main_player->points += total_wrong_points;
-            printf("1\n\n");
+            //printf("1\n\n");
+            //printf("End round, Main player: %s, %.2f \n", main_player->token, main_player->points);
             if(active_player_count - eliminated_player_count > 1){
                 usleep(1 * 1000 * 1000);
                 start_new_round();
             }else{
                 char message[BUFFER_SIZE];
-                snprintf(message, sizeof(message), "ROUNDRESULT|MAINPLAYER_WIN|%.2f", main_player->points);
+                snprintf(message, sizeof(message), "ROUNDRESULT|MAINPLAYER_WIN|%s|%.2f", main_player->token, main_player->points);
                 for (int i = 0; i < active_player_count; i++) {
                     send(active_players[i].client_sock, message, strlen(message), 0);
                 }
             }
+        } else if(skipped_count < 2 && strcmp(main_player_answer, "5") == 0){
+            float distributed_points = total_wrong_points / (active_player_count - eliminated_player_count - 1);
+            for (int i = 0; i < active_player_count; i++) {
+                if (!active_players[i].eliminated && active_players[i].correct && strcmp(active_players[i].token, main_player->token) != 0) {
+                    active_players[i].points += distributed_points;
+                }
+            }
+            //printf("\n\n2\n\n");
+            //printf("End round, Main player: %s, %.2f \n", main_player->token, main_player->points);
+            skipped_count++;
+            usleep(1 * 1000 * 1000);
+            start_new_round();
         } else {
-            printf("New main player: %s\n", new_main_player->token);
-            printf("Main player: %s\n", main_player->token);
+            //printf("New main player: %s\n", new_main_player->token);
+            //printf("Main player: %s\n", main_player->token);
+            //printf("\n\n3\n\n");
             if (new_main_player->token) {
                 float distributed_points = total_wrong_points / (active_player_count - eliminated_player_count);
                 for (int i = 0; i < active_player_count; i++) {
@@ -318,7 +340,8 @@ void handle_round_result() {
                     }
                 }
                 main_player = new_main_player;
-                printf("Main player: %s, %.2f \n", main_player->token, main_player->points);
+                //printf("Main player: %s, %.2f \n", main_player->token, main_player->points);
+                skipped_count = 0;
                 if(active_player_count - eliminated_player_count > 1){
                     char message[BUFFER_SIZE];
                     snprintf(message, sizeof(message), "ROUNDRESULT|NEWMAINPLAYER|%s", main_player->token);
@@ -331,7 +354,7 @@ void handle_round_result() {
                     start_new_round();
                 }else{
                     char message[BUFFER_SIZE];
-                    snprintf(message, sizeof(message), "ROUNDRESULT|MAINPLAYER_WIN|%.2f", main_player->points);
+                    snprintf(message, sizeof(message), "ROUNDRESULT|MAINPLAYER_WIN|%s|%.2f", main_player->token, main_player->points);
                     for (int i = 0; i < active_player_count; i++) {
                         send(active_players[i].client_sock, message, strlen(message), 0);
                     }
@@ -409,6 +432,14 @@ void* handle_client(void *arg) {
                 if(main_player_choice){
                     handle_round_result();
                 }
+
+                if(main_player_choice){
+                    if(strcmp(main_player->token, token) == 0){
+                        main_player_answer = malloc(sizeof(main_player_answer));
+                        strcpy(main_player_answer, answer);
+                    }
+                }
+
             } else {
                 send(client_sock, "invalid command\n", 17, 0);
             }

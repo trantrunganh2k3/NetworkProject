@@ -46,7 +46,7 @@ void login_packet(){
 void join_game_packet() {
     if (strlen(current_token) == 0) {
         printf("Please login first to get a token.\n");
-        return;
+        show_menu();
     }else{
         snprintf(buffer, sizeof(buffer), "JOINGAME %s", current_token);
     }
@@ -181,7 +181,7 @@ int main() {
             printf("1. %s\n2. %s\n3. %s\n4. %s\n", option1, option2, option3, option4);
             answer_game_packet(questionID, sock);
         }
-        else if (strncmp(buffer, "GAMEOVER", 8) == 0) {
+        else if (strcmp(fcode, "GAMEOVER") == 0) {
             printf("Game Result: %s\n", buffer);
             in_game = 0;
         }
@@ -190,7 +190,7 @@ int main() {
             printf("Invalid command\n");
         }
 
-        if (strcmp(buffer, "ANSWER") == 0)
+        if (strcmp(fcode, "ANSWER") == 0)
         {
             char *message = strtok(NULL, "|");
             if(strncmp(message, "Correct!", 8) == 0)
@@ -204,7 +204,7 @@ int main() {
         }
         
 
-        if (strcmp(buffer, "MAINPLAYER") == 0)
+        if (strcmp(fcode, "MAINPLAYER") == 0)
         {
             char *token = strtok(NULL, "|");
             if(strcmp(token, current_token) == 0)
@@ -214,6 +214,29 @@ int main() {
             else
             {
                 printf("You are not the main player!\n");
+            }
+        }
+
+        if (strcmp(fcode, "ROUNDRESULT") == 0){
+            char *message = strtok(NULL, "|");
+            if(strcmp(message, "MAINPLAYER_WIN") == 0){
+                char *token = strtok(NULL, "|");
+                if(strcmp(token, current_token) == 0){
+                    printf("You win the game!\n");
+                } else {
+                    printf("You are defeated!\n");
+                }
+                in_game = 0;
+            }else if(strcmp(message, "NEWMAINPLAYER") == 0){
+                char *token = strtok(NULL, "|");
+                if(strcmp(token, current_token) == 0){
+                    printf("You are new main player!\n");
+                } else {
+                    printf("Main player in the game changed!\n");
+                }
+            }else{
+                printf("No one wins the game!\n");
+                in_game = 0;
             }
         }
         
