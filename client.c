@@ -57,12 +57,17 @@ void answer_game_packet(char *questionID, int sock) {
         printf("Please login first to get a token.\n");
         return;
     }
-    printf("%s\n", questionID);
     char answer[3];
+    char *question_id = (char *)malloc(2);
+    question_id[0] = questionID[0];
+    question_id[1] = '\0';
+
     printf("Enter your answer (1-4): ");
     scanf("%s", answer);
     bzero(buffer, sizeof(buffer));
-    snprintf(buffer, sizeof(buffer), "ANSWER %s %s %s", current_token, questionID, answer);
+    snprintf(buffer, sizeof(buffer), "ANSWER %s %s %s", current_token, question_id, answer);
+    printf("%s\n", question_id);
+
 //    printf("%llu\n", strlen(buffer));
     printf("Sending packet: '%s'\n", buffer);
     send(sock, buffer, strlen(buffer), 0);
