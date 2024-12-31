@@ -54,8 +54,6 @@ int user_count = 0;
 Player *main_player = NULL;
 int client_count = 0;
 
-const char *question = "Kết quả của phép tính 2 + 2 là: ";
-const char *correct_answer = "4";
 int active_player_count = 0;
 int game_in_progress = 0; // 0: Không có trò chơi, 1: Đang diễn ra
 int main_player_choice = 0; // 0: Chưa chọn, 1: Chọn đúng
@@ -69,8 +67,6 @@ typedef struct {
     char answers[4][64];
     char correct_answers[2];
 } Question;
-
-question_number = 0;
 
 Question questions[MAX_QUESTIONS] = {
     {
@@ -171,6 +167,15 @@ int find_user(const char *username) {
             return i;
     }
     return -1;
+}
+
+void reset() {
+    active_player_count = 0;
+    game_in_progress = 0; // 0: Không có trò chơi, 1: Đang diễn ra
+    main_player_choice = 0; // 0: Chưa chọn, 1: Chọn đúng
+    number_of_questions = 0;
+    eliminated_player_count = 0; // Số người chơi bị loại
+    skipped_count = 0;
 }
 
 //Them o day
@@ -375,7 +380,7 @@ void handle_round_result() {
             main_player->points += total_wrong_points;
             //printf("1\n\n");
             //printf("End round, Main player: %s, %.2f \n", main_player->token, main_player->points);
-            if(active_player_count - eliminated_player_count > 1){
+            if(active_player_count - eliminated_player_count > 1 && number_of_questions < 9){
                 usleep(1 * 1000 * 1000);
                 start_new_round();
             }else{
@@ -384,6 +389,7 @@ void handle_round_result() {
                 for (int i = 0; i < active_player_count; i++) {
                     send(active_players[i].client_sock, message, strlen(message), 0);
                 }
+                reset();
             }
         } else if(skipped_count < 2 && strcmp(main_player_answer, "5") == 0){
             float distributed_points = total_wrong_points / (active_player_count - eliminated_player_count - 1);
@@ -411,7 +417,7 @@ void handle_round_result() {
                 main_player = new_main_player;
                 //printf("Main player: %s, %.2f \n", main_player->token, main_player->points);
                 skipped_count = 0;
-                if(active_player_count - eliminated_player_count > 1){
+                if(active_player_count - eliminated_player_count > 1 && number_of_questions < 9){
                     char message[BUFFER_SIZE];
                     snprintf(message, sizeof(message), "ROUNDRESULT|NEWMAINPLAYER|%s", main_player->token);
                     for (int i = 0; i < active_player_count; i++) {
@@ -427,10 +433,12 @@ void handle_round_result() {
                     for (int i = 0; i < active_player_count; i++) {
                         send(active_players[i].client_sock, message, strlen(message), 0);
                     }
+                    reset();
                 }
             } else {
                 for (int i = 0; i < active_player_count; i++) {
                     send(active_players[i].client_sock, "ROUNDRESULT|NO_WINNER", 22, 0);
+                    reset();
                 }
             }
         }
